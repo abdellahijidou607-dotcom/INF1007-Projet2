@@ -1,30 +1,40 @@
+
 import pandas as pd
 import matplotlib.pyplot as plt
-
 from pathlib import Path
 
-chemin = Path(__file__).resolve().parent / "donnees" / "restaurant_survival.csv"
-donnees = pd.read_csv(chemin)
 
-print(donnees.head())
-print("Nombre de restaurants :", len(donnees))
-print("Colonnes :", donnees.columns.tolist())
+def graphique_survie():
+    # Chemin du fichier CSV
+    chemin = Path(__file__).parent / "donnees" / "restaurant_survival.csv"
 
- # Compter les restaurants selon leur survie
-effectifs = donnees["survived_3y"].value_counts()
+    # Lecture des données
+    donnees = pd.read_csv(chemin)
 
-# Créer le graphique
-plt.bar(
-    ["Fermeture", "Survie"],
-    [effectifs.get(0, 0), effectifs.get(1, 0)],
-    color=["red", "green"]
-)
+    # Compter les restaurants fermés et survivants
+    resultats = donnees["survived_3y"].value_counts()
 
-# Ajouter les titres
-plt.title("Survie des restaurants après 3 ans")
-plt.xlabel("Résultat")
-plt.ylabel("Nombre de restaurants")
+    fermetures = resultats.get(0, 0)
+    survies = resultats.get(1, 0)
 
-# Afficher le graphique
-plt.savefig("graphique_survie.png")
-plt.show()
+    # Création du graphique
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    ax.bar(
+        ["Fermeture", "Survie"],
+        [fermetures, survies],
+        color=["red", "green"]
+    )
+
+    ax.set_title("Survie des restaurants après 3 ans")
+    ax.set_xlabel("Résultat")
+    ax.set_ylabel("Nombre de restaurants")
+
+    fig.tight_layout()
+
+    return fig
+
+
+if __name__ == "__main__":
+    graphique_survie()
+    plt.show()
