@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 DOSSIER = Path(__file__).resolve().parent
-CSV = DOSSIER / "donnees" / "restaurant_survival.csv"
+CSV = DOSSIER / "restaurant_survival.csv"
 
 
 def graphique_survie():

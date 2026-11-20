@@ -1,12 +1,12 @@
 
 from interface import Application
+from modele import ModeleSurvie
 
 
 def main():
     """Démarre l'application de prédiction."""
 
-    # Le modèle sera relié quand il sera disponible.
-    predicteur = None
+    predicteur = ModeleSurvie.charger().predire
 
     application = Application(
         predicteur=predicteur

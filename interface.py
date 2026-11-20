@@ -15,9 +15,9 @@ from visualisation import graphique_survie, graphique_prediction
 
 
 DOSSIER = Path(__file__).resolve().parent
-CSV = DOSSIER / "donnees" / "restaurant_survival.csv"
+CSV = DOSSIER / "restaurant_survival.csv"
 HISTORIQUE = DOSSIER / "historique_predictions.csv"
-METADONNEES = DOSSIER / "modeles" / "metadonnees.json"
+METADONNEES = DOSSIER / "metadonnees.json"
 
 INTERDITES = {
     "restaurant_id",
