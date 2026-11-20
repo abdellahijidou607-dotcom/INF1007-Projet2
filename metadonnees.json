@@ -1,0 +1,116 @@
+{
+  "algorithme": "LogisticRegression",
+  "cible": "survived_3y",
+  "colonnes": [
+    "cuisine",
+    "location_type",
+    "is_franchise",
+    "owner_experience_years",
+    "foot_traffic",
+    "competition_density",
+    "rent_to_revenue",
+    "starting_capital_months",
+    "labor_cost_ratio",
+    "price_tier",
+    "seats",
+    "menu_size",
+    "has_marketing",
+    "avg_review_rating",
+    "review_count"
+  ],
+  "types": {
+    "cuisine": "str",
+    "location_type": "str",
+    "is_franchise": "int64",
+    "owner_experience_years": "float64",
+    "foot_traffic": "float64",
+    "competition_density": "float64",
+    "rent_to_revenue": "float64",
+    "starting_capital_months": "float64",
+    "labor_cost_ratio": "float64",
+    "price_tier": "int64",
+    "seats": "int64",
+    "menu_size": "int64",
+    "has_marketing": "int64",
+    "avg_review_rating": "float64",
+    "review_count": "int64"
+  },
+  "categories": {
+    "cuisine": [
+      "american",
+      "cafe",
+      "chinese",
+      "fast_casual",
+      "fine_dining",
+      "indian",
+      "italian",
+      "japanese",
+      "mexican"
+    ],
+    "location_type": [
+      "downtown",
+      "mall_foodcourt",
+      "standalone",
+      "suburb_strip",
+      "tourist_area"
+    ]
+  },
+  "binaires": [
+    "is_franchise",
+    "has_marketing"
+  ],
+  "plages": {
+    "is_franchise": [
+      0.0,
+      1.0
+    ],
+    "owner_experience_years": [
+      0.0,
+      35.0
+    ],
+    "foot_traffic": [
+      0.0,
+      10.0
+    ],
+    "competition_density": [
+      0.0,
+      10.0
+    ],
+    "rent_to_revenue": [
+      0.02,
+      0.32
+    ],
+    "starting_capital_months": [
+      0.5,
+      35.6
+    ],
+    "labor_cost_ratio": [
+      0.15,
+      0.486
+    ],
+    "price_tier": [
+      1.0,
+      4.0
+    ],
+    "seats": [
+      12.0,
+      300.0
+    ],
+    "menu_size": [
+      6.0,
+      110.0
+    ],
+    "has_marketing": [
+      0.0,
+      1.0
+    ],
+    "avg_review_rating": [
+      1.92,
+      5.0
+    ],
+    "review_count": [
+      0.0,
+      992.0
+    ]
+  }
+}
