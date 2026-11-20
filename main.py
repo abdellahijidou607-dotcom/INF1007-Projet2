@@ -3,7 +3,15 @@ from interface import Application
 
 
 def main():
-    application = Application()
+    """Démarre l'application de prédiction."""
+
+    # Le modèle sera relié quand il sera disponible.
+    predicteur = None
+
+    application = Application(
+        predicteur=predicteur
+    )
+
     application.mainloop()
 
 
