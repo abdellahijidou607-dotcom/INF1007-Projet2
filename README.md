@@ -2,7 +2,7 @@
 
 Projet 2 — INF1007 (Introduction à la programmation), Polytechnique Montréal, automne 2026.
 
-**Équipe :** Hicham Omar Mahamoud, Abdellahi Jidou
+**Équipe :** Hicham Omar Mahamoud, Abdlahi Jidou
 
 ## Description
 
