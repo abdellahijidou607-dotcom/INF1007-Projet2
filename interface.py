@@ -1,818 +1,231 @@
+"""Interface graphique Tkinter.
 
-import csv
-import json
-import math
-from datetime import datetime
-from pathlib import Path
+L'interface appelle la logique du projet sans la contenir : la validation est
+faite par les objets Variable, la prédiction par ModeleSurvie et l'enregistrement
+par Historique (composition : Application contient ces trois éléments).
+"""
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
-from visualisation import graphique_survie, graphique_prediction
+from exceptions import DonneeInvalideError, FichierIntrouvableError, ModeleNonEntraineError
+from historique import Historique
+from modele import ModeleSurvie
+from variables import Variable, VariableCategorielle
+from visualisation import graphique_prediction, graphique_survie
 
-
-DOSSIER = Path(__file__).resolve().parent
-CSV = DOSSIER / "restaurant_survival.csv"
-HISTORIQUE = DOSSIER / "historique_predictions.csv"
-METADONNEES = DOSSIER / "metadonnees.json"
-
-INTERDITES = {
-    "restaurant_id",
-    "years_survived",
-    "failure_reason",
-    "survived_3y"
-}
-
-NOMS = {
-    "cuisine": "Type de cuisine",
-    "location_type": "Emplacement",
-    "is_franchise": "Restaurant franchisé",
-    "owner_experience_years": "Expérience du propriétaire",
-    "foot_traffic": "Fréquentation",
-    "competition_density": "Densité de concurrence",
-    "rent_to_revenue": "Ratio loyer / revenus",
-    "starting_capital_months": "Capital de départ (mois)",
-    "labor_cost_ratio": "Ratio coût du personnel",
-    "price_tier": "Catégorie de prix",
-    "seats": "Nombre de places",
-    "menu_size": "Nombre de plats au menu",
-    "has_marketing": "Marketing",
-    "avg_review_rating": "Note moyenne",
-    "review_count": "Nombre d'avis"
-}
+AVERTISSEMENT = ("Outil pédagogique (projet INF1007) : les prédictions ne constituent "
+                 "ni une garantie ni une aide à la décision financière.")
 
 
 class Application(tk.Tk):
-    """Interface graphique de prédiction des restaurants."""
+    """Fenêtre principale de prédiction de survie des restaurants."""
 
-    def __init__(self, predicteur=None):
+    FOND = "#F3F6FA"
+    BLEU = "#17324D"
+    VERT = "#16816F"
+    BLANC = "#FFFFFF"
+
+    def __init__(self, modele: ModeleSurvie, variables: list[Variable],
+                 historique: Historique) -> None:
         super().__init__()
-
-        self.predicteur = predicteur
+        self._modele = modele
+        self._variables = list(variables)
+        self._historique = historique
+        self._champs: dict[str, tk.StringVar] = {}
+        self._figure: Figure | None = None
+        self._canvas_graphique: FigureCanvasTkAgg | None = None
+        self._defilement: tk.Canvas | None = None
+        self._zone_souris: tk.Frame | None = None
 
         self.title("Restaurant Predictor - INF1007")
         self.geometry("1200x800")
         self.minsize(950, 620)
+        self.configure(bg=self.FOND)
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("TEntry", padding=5)
+        style.configure("TCombobox", padding=5)
 
-        self.fond = "#F3F6FA"
-        self.bleu = "#17324D"
-        self.vert = "#16816F"
-        self.blanc = "#FFFFFF"
+        self._creer_entete()
+        contenu = self._creer_contenu()
+        self._creer_formulaire(contenu)
+        self._creer_zone_resultats(contenu)
+        self._afficher_graphique_initial()
+        self.bind_all("<MouseWheel>", self._defiler_souris)
 
-        self.configure(bg=self.fond)
-
-        self.variables = {}
-        self.figure = None
-        self.canvas_graphique = None
-
-        # Le formulaire qui pourra défiler
-        self.defilement = None
-        self.zone_souris = None
-
-        self.style = ttk.Style(self)
-        self.style.theme_use("clam")
-        self.style.configure("TEntry", padding=5)
-        self.style.configure("TCombobox", padding=5)
-
-        self.definitions = self.charger_definitions()
-
-        self.creer_interface()
-        self.afficher_graphique(graphique_survie())
-
-        # Activer la molette uniquement dans la zone du formulaire
-        self.bind_all("<MouseWheel>", self.defiler_souris)
-
-    def charger_definitions(self) -> dict:
-        """Charge les variables d'entrée et leurs types."""
-
-        donnees = pd.read_csv(CSV)
-
-        colonnes = [
-            nom for nom in donnees.columns
-            if nom not in INTERDITES
-        ]
-
-        if METADONNEES.exists():
-            with open(
-                METADONNEES, "r", encoding="utf-8"
-            ) as fichier:
-                meta = json.load(fichier)
-
-            noms_modele = meta.get(
-                "colonnes",
-                meta.get(
-                    "features",
-                    meta.get("feature_names")
-                )
-            )
-
-            if isinstance(noms_modele, list) and all(
-                isinstance(nom, str)
-                for nom in noms_modele
-            ):
-                colonnes = [
-                    nom for nom in noms_modele
-                    if nom not in INTERDITES
-                ]
-
-        definitions = {}
-
-        for nom in colonnes:
-            if nom not in donnees.columns:
-                raise ValueError(
-                    f"Colonne inconnue : {nom}"
-                )
-
-            serie = donnees[nom].dropna()
-
-            if serie.empty:
-                raise ValueError(
-                    f"Aucune valeur pour {nom}"
-                )
-
-            if (
-                not pd.api.types.is_numeric_dtype(serie)
-                or nom in ("is_franchise", "has_marketing")
-            ):
-                choix = sorted(
-                    str(v) for v in serie.unique()
-                )
-
-                definitions[nom] = {
-                    "type": "categorie",
-                    "choix": choix
-                }
-
-            else:
-                entier = pd.api.types.is_integer_dtype(
-                    serie
-                )
-
-                definitions[nom] = {
-                    "type": "entier" if entier else "reel",
-                    "min": float(serie.min()),
-                    "max": float(serie.max())
-                }
-
-        return definitions
-
-    def creer_interface(self) -> None:
-        """Crée les différents éléments de la fenêtre."""
-
-        # Bandeau supérieur
-        entete = tk.Frame(
-            self,
-            bg=self.bleu,
-            height=90
-        )
+    def _creer_entete(self) -> None:
+        """Crée le bandeau supérieur avec le titre."""
+        entete = tk.Frame(self, bg=self.BLEU, height=90)
         entete.pack(fill="x")
         entete.pack_propagate(False)
+        tk.Label(entete, text="RESTAURANT SURVIVAL PREDICTOR", font=("Arial", 20, "bold"),
+                 bg=self.BLEU, fg=self.BLANC).pack(anchor="w", padx=25, pady=(15, 2))
+        tk.Label(entete, text="INF1007 | Prédiction de survie à 3 ans", font=("Arial", 11),
+                 bg=self.BLEU, fg="#D8E5F0").pack(anchor="w", padx=25)
 
-        tk.Label(
-            entete,
-            text="RESTAURANT SURVIVAL PREDICTOR",
-            font=("Arial", 20, "bold"),
-            bg=self.bleu,
-            fg=self.blanc
-        ).pack(
-            anchor="w",
-            padx=25,
-            pady=(15, 2)
-        )
-
-        tk.Label(
-            entete,
-            text="INF1007 | Prédiction de survie à 3 ans",
-            font=("Arial", 11),
-            bg=self.bleu,
-            fg="#D8E5F0"
-        ).pack(anchor="w", padx=25)
-
-        # Contenu principal
-        contenu = tk.Frame(
-            self,
-            bg=self.fond
-        )
-        contenu.pack(
-            fill="both",
-            expand=True,
-            padx=18,
-            pady=18
-        )
-
+    def _creer_contenu(self) -> tk.Frame:
+        """Crée la zone principale à deux colonnes et la renvoie."""
+        contenu = tk.Frame(self, bg=self.FOND)
+        contenu.pack(fill="both", expand=True, padx=18, pady=18)
         contenu.columnconfigure(0, weight=1)
         contenu.columnconfigure(1, weight=2)
         contenu.rowconfigure(0, weight=1)
+        return contenu
 
-        # Partie gauche
-        gauche = tk.Frame(
-            contenu,
-            bg=self.blanc
-        )
-        gauche.grid(
-            row=0,
-            column=0,
-            sticky="nsew",
-            padx=(0, 10)
-        )
+    def _creer_formulaire(self, contenu: tk.Frame) -> None:
+        """Crée la colonne de gauche : un champ par variable et les boutons."""
+        gauche = tk.Frame(contenu, bg=self.BLANC)
+        gauche.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        tk.Label(gauche, text="Caractéristiques du restaurant", font=("Arial", 14, "bold"),
+                 bg=self.BLANC, fg=self.BLEU).pack(anchor="w", padx=15, pady=15)
 
-        tk.Label(
-            gauche,
-            text="Caractéristiques du restaurant",
-            font=("Arial", 14, "bold"),
-            bg=self.blanc,
-            fg=self.bleu
-        ).pack(
-            anchor="w",
-            padx=15,
-            pady=15
-        )
+        zone = tk.Frame(gauche, bg=self.BLANC)
+        zone.pack(fill="both", expand=True, padx=10)
+        self._zone_souris = zone
+        self._defilement = tk.Canvas(zone, bg=self.BLANC, highlightthickness=0)
+        barre = ttk.Scrollbar(zone, orient="vertical", command=self._defilement.yview)
+        formulaire = tk.Frame(self._defilement, bg=self.BLANC)
+        fenetre = self._defilement.create_window((0, 0), window=formulaire, anchor="nw")
+        formulaire.bind("<Configure>", lambda e: self._defilement.configure(
+            scrollregion=self._defilement.bbox("all")))
+        self._defilement.bind("<Configure>", lambda e: self._defilement.itemconfigure(
+            fenetre, width=e.width))
+        self._defilement.configure(yscrollcommand=barre.set)
+        barre.pack(side="right", fill="y")
+        self._defilement.pack(side="left", fill="both", expand=True)
 
-        # Zone défilante
-        zone = tk.Frame(
-            gauche,
-            bg=self.blanc
-        )
-        zone.pack(
-            fill="both",
-            expand=True,
-            padx=10
-        )
+        for variable in self._variables:
+            self._ajouter_champ(formulaire, variable)
 
-        self.defilement = tk.Canvas(
-            zone,
-            bg=self.blanc,
-            highlightthickness=0
-        )
+        actions = tk.Frame(gauche, bg=self.BLANC)
+        actions.pack(fill="x", padx=15, pady=12)
+        tk.Button(actions, text="PRÉDIRE LA SURVIE", command=self.predire, bg=self.VERT,
+                  fg="white", font=("Arial", 11, "bold"), relief="flat", cursor="hand2",
+                  pady=10).pack(fill="x", pady=(0, 8))
+        tk.Button(actions, text="Consulter l'historique", command=self.voir_historique,
+                  bg="#E8EFF5", fg=self.BLEU, font=("Arial", 10), relief="flat",
+                  cursor="hand2", pady=8).pack(fill="x")
 
-        barre = ttk.Scrollbar(
-            zone,
-            orient="vertical",
-            command=self.defilement.yview
-        )
+    def _creer_zone_resultats(self, contenu: tk.Frame) -> None:
+        """Crée la colonne de droite : résultat, graphique et avertissement."""
+        droite = tk.Frame(contenu, bg=self.BLANC)
+        droite.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        tk.Label(droite, text="Analyse et résultats", font=("Arial", 15, "bold"),
+                 bg=self.BLANC, fg=self.BLEU).pack(anchor="w", padx=20, pady=(18, 10))
+        self._resultat = tk.Label(droite, text="En attente d'une prédiction", bg="#E8F4F1",
+                                  fg=self.BLEU, font=("Arial", 13, "bold"), padx=15, pady=18,
+                                  wraplength=500, justify="center")
+        self._resultat.pack(fill="x", padx=20, pady=8)
+        self._zone_graphique = tk.Frame(droite, bg=self.BLANC)
+        self._zone_graphique.pack(fill="both", expand=True, padx=15, pady=10)
+        tk.Label(droite, text=AVERTISSEMENT, bg=self.BLANC, fg="#66788A",
+                 font=("Arial", 9), wraplength=550).pack(pady=12)
 
-        formulaire = tk.Frame(
-            self.defilement,
-            bg=self.blanc
-        )
+    def _ajouter_champ(self, parent: tk.Frame, variable: Variable) -> None:
+        """Ajoute un champ adapté au type de la variable (liste ou champ texte)."""
+        groupe = tk.Frame(parent, bg=self.BLANC)
+        groupe.pack(fill="x", padx=12, pady=6)
+        tk.Label(groupe, text=variable.libelle, bg=self.BLANC, fg=self.BLEU,
+                 font=("Arial", 10, "bold")).pack(anchor="w", pady=(0, 4))
+        texte = tk.StringVar()
+        self._champs[variable.nom] = texte
+        if isinstance(variable, VariableCategorielle):
+            ttk.Combobox(groupe, textvariable=texte, values=variable.choix,
+                         state="readonly").pack(fill="x")
+            texte.set(variable.choix[0])
+        else:
+            ttk.Entry(groupe, textvariable=texte).pack(fill="x")
+            tk.Label(groupe, text=variable.description(), bg=self.BLANC, fg="#798899",
+                     font=("Arial", 8)).pack(anchor="w")
 
-        fenetre_formulaire = (
-            self.defilement.create_window(
-                (0, 0),
-                window=formulaire,
-                anchor="nw"
-            )
-        )
-
-        formulaire.bind(
-            "<Configure>",
-            lambda e: self.defilement.configure(
-                scrollregion=self.defilement.bbox("all")
-            )
-        )
-
-        self.defilement.bind(
-            "<Configure>",
-            lambda e: self.defilement.itemconfigure(
-                fenetre_formulaire,
-                width=e.width
-            )
-        )
-
-        self.defilement.configure(
-            yscrollcommand=barre.set
-        )
-
-        barre.pack(
-            side="right",
-            fill="y"
-        )
-
-        self.defilement.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-
-        # Mémoriser la zone du formulaire
-        self.zone_souris = zone
-
-        for nom, definition in self.definitions.items():
-            self.ajouter_champ(
-                formulaire,
-                nom,
-                definition
-            )
-
-        # Boutons sous le formulaire
-        actions = tk.Frame(
-            gauche,
-            bg=self.blanc
-        )
-        actions.pack(
-            fill="x",
-            padx=15,
-            pady=12
-        )
-
-        tk.Button(
-            actions,
-            text="PRÉDIRE LA SURVIE",
-            command=self.predire,
-            bg=self.vert,
-            fg="white",
-            font=("Arial", 11, "bold"),
-            relief="flat",
-            cursor="hand2",
-            pady=10
-        ).pack(
-            fill="x",
-            pady=(0, 8)
-        )
-
-        tk.Button(
-            actions,
-            text="Consulter l'historique",
-            command=self.voir_historique,
-            bg="#E8EFF5",
-            fg=self.bleu,
-            font=("Arial", 10),
-            relief="flat",
-            cursor="hand2",
-            pady=8
-        ).pack(fill="x")
-
-        # Partie droite
-        droite = tk.Frame(
-            contenu,
-            bg=self.blanc
-        )
-        droite.grid(
-            row=0,
-            column=1,
-            sticky="nsew",
-            padx=(10, 0)
-        )
-
-        tk.Label(
-            droite,
-            text="Analyse et résultats",
-            font=("Arial", 15, "bold"),
-            bg=self.blanc,
-            fg=self.bleu
-        ).pack(
-            anchor="w",
-            padx=20,
-            pady=(18, 10)
-        )
-
-        self.resultat = tk.Label(
-            droite,
-            text="En attente d'une prédiction",
-            bg="#E8F4F1",
-            fg=self.bleu,
-            font=("Arial", 13, "bold"),
-            padx=15,
-            pady=18,
-            wraplength=500,
-            justify="center"
-        )
-        self.resultat.pack(
-            fill="x",
-            padx=20,
-            pady=8
-        )
-
-        self.zone_graphique = tk.Frame(
-            droite,
-            bg=self.blanc
-        )
-        self.zone_graphique.pack(
-            fill="both",
-            expand=True,
-            padx=15,
-            pady=10
-        )
-
-        tk.Label(
-            droite,
-            text=(
-                "Outil pédagogique : les prédictions "
-                "ne constituent pas une garantie."
-            ),
-            bg=self.blanc,
-            fg="#66788A",
-            font=("Arial", 9),
-            wraplength=550
-        ).pack(pady=12)
-
-    def defiler_souris(self, event) -> None:
-        """Défile avec la molette dans le formulaire seulement."""
-
-        if self.defilement is None:
+    def _defiler_souris(self, event: tk.Event) -> None:
+        """Fait défiler le formulaire avec la molette, seulement au-dessus de lui."""
+        if self._defilement is None or event.delta == 0:
             return
-
-        # Trouver la position actuelle de la souris
-        x = self.winfo_pointerx()
-        y = self.winfo_pointery()
-
-        # Trouver le widget sous le pointeur
-        widget = self.winfo_containing(x, y)
-
+        widget = self.winfo_containing(self.winfo_pointerx(), self.winfo_pointery())
+        while widget is not None and widget != self._zone_souris:
+            widget = widget.master
         if widget is None:
             return
-
-        # Vérifier si le pointeur se trouve dans le formulaire
-        courant = widget
-
-        while courant is not None:
-            if courant == self.zone_souris:
-                break
-
-            courant = courant.master
-
-        if courant is None:
-            return
-
-        # Windows : delta positif vers le haut
-        if event.delta > 0:
-            deplacement = -1
-        elif event.delta < 0:
-            deplacement = 1
-        else:
-            return
-
-        self.defilement.yview_scroll(
-            deplacement, "units"
-        )
-
-    def ajouter_champ(
-        self,
-        parent: tk.Frame,
-        nom: str,
-        definition: dict
-    ) -> None:
-        """Ajoute un champ à la zone défilante."""
-
-        groupe = tk.Frame(
-            parent,
-            bg=self.blanc
-        )
-        groupe.pack(
-            fill="x",
-            padx=12,
-            pady=6
-        )
-
-        tk.Label(
-            groupe,
-            text=NOMS.get(nom, nom),
-            bg=self.blanc,
-            fg=self.bleu,
-            font=("Arial", 10, "bold")
-        ).pack(
-            anchor="w",
-            pady=(0, 4)
-        )
-
-        variable = tk.StringVar()
-        self.variables[nom] = variable
-
-        if definition["type"] == "categorie":
-
-            valeurs = definition["choix"]
-
-            ttk.Combobox(
-                groupe,
-                textvariable=variable,
-                values=valeurs,
-                state="readonly"
-            ).pack(fill="x")
-
-            if valeurs:
-                variable.set(valeurs[0])
-
-        else:
-            ttk.Entry(
-                groupe,
-                textvariable=variable
-            ).pack(fill="x")
-
-            tk.Label(
-                groupe,
-                text=(
-                    f"Valeurs observées : "
-                    f"{definition['min']:g} à "
-                    f"{definition['max']:g}"
-                ),
-                bg=self.blanc,
-                fg="#798899",
-                font=("Arial", 8)
-            ).pack(anchor="w")
+        self._defilement.yview_scroll(-1 if event.delta > 0 else 1, "units")
 
     def lire_valeurs(self) -> dict:
-        """Valide les champs et retourne les valeurs."""
+        """Valide chaque champ avec sa Variable (polymorphisme).
 
-        valeurs = {}
-
-        for nom, definition in self.definitions.items():
-
-            texte = self.variables[nom].get().strip()
-
-            if not texte:
-                raise ValueError(
-                    f"Veuillez remplir : "
-                    f"{NOMS.get(nom, nom)}"
-                )
-
-            if definition["type"] == "categorie":
-
-                if texte not in definition["choix"]:
-                    raise ValueError(
-                        f"Catégorie invalide : {nom}"
-                    )
-
-                if nom in (
-                    "is_franchise",
-                    "has_marketing"
-                ):
-                    valeurs[nom] = int(texte)
-                else:
-                    valeurs[nom] = texte
-
-            else:
-                try:
-                    if definition["type"] == "entier":
-                        valeur = int(texte)
-                    else:
-                        valeur = float(texte)
-
-                except ValueError:
-                    raise ValueError(
-                        f"Nombre invalide : "
-                        f"{NOMS.get(nom, nom)}"
-                    )
-
-                if not math.isfinite(valeur):
-                    raise ValueError(
-                        f"Valeur non finie : {nom}"
-                    )
-
-                if not (
-                    definition["min"]
-                    <= valeur
-                    <= definition["max"]
-                ):
-                    raise ValueError(
-                        f"{NOMS.get(nom, nom)} doit être entre "
-                        f"{definition['min']:g} et "
-                        f"{definition['max']:g}"
-                    )
-
-                valeurs[nom] = valeur
-
-        return valeurs
+        Renvoie : un dict {nom_colonne: valeur convertie}.
+        Échoue : DonneeInvalideError au premier champ invalide.
+        """
+        return {v.nom: v.valider(self._champs[v.nom].get()) for v in self._variables}
 
     def predire(self) -> None:
-        """Vérifie les saisies et appelle le modèle."""
-
+        """Valide les saisies, appelle le modèle et affiche le résultat."""
         try:
             valeurs = self.lire_valeurs()
-
-        except ValueError as erreur:
-            messagebox.showerror(
-                "Erreur de saisie",
-                str(erreur)
-            )
+        except DonneeInvalideError as erreur:
+            messagebox.showerror("Erreur de saisie", str(erreur))
             return
-
-        if self.predicteur is None:
-            self.resultat.config(
-                text="Interface prête - modèle non connecté",
-                bg="#FFF1DB"
-            )
-
-            messagebox.showinfo(
-                "Modèle non disponible",
-                "Les champs sont valides. "
-                "Il reste à connecter le modèle entraîné."
-            )
-            return
-
         try:
-            classe, probabilite = self.predicteur(valeurs)
+            classe, probabilite = self._modele.predire(valeurs)
+        except (DonneeInvalideError, ModeleNonEntraineError, ValueError) as erreur:
+            messagebox.showerror("Erreur du modèle", str(erreur))
+            return
+        self._afficher_resultat(classe, probabilite)
+        try:
+            self._historique.ajouter(valeurs, classe, probabilite)
+        except (OSError, DonneeInvalideError) as erreur:
+            messagebox.showwarning("Historique", f"Prédiction non enregistrée : {erreur}")
 
-            classe = int(classe)
-            probabilite = float(probabilite)
+    def _afficher_resultat(self, classe: int, probabilite: float) -> None:
+        """Affiche le résultat en langage clair et le graphique des probabilités."""
+        if classe == 1:
+            message, couleur = "Survie probable à 3 ans", "#DDF3EA"
+        else:
+            message, couleur = "Fermeture probable avant 3 ans", "#FCE8E4"
+        self._resultat.config(text=f"{message}\nProbabilité de survie : {probabilite * 100:.1f} %",
+                              bg=couleur)
+        self._afficher_graphique(graphique_prediction(probabilite))
 
-            if classe not in (0, 1):
-                raise ValueError(
-                    "Classe prédite invalide."
-                )
+    def _afficher_graphique_initial(self) -> None:
+        """Affiche le graphique d'exploration, ou un message si le CSV manque."""
+        try:
+            self._afficher_graphique(graphique_survie())
+        except (FichierIntrouvableError, DonneeInvalideError, OSError) as erreur:
+            tk.Label(self._zone_graphique, text=f"Graphique indisponible : {erreur}",
+                     bg=self.BLANC, fg="#66788A", wraplength=500).pack(pady=20)
 
-            if not (
-                math.isfinite(probabilite)
-                and 0 <= probabilite <= 1
-            ):
-                raise ValueError(
-                    "Probabilité invalide."
-                )
-
-            if classe == 1:
-                message = "Survie probable à 3 ans"
-                couleur = "#DDF3EA"
-            else:
-                message = "Fermeture probable avant 3 ans"
-                couleur = "#FCE8E4"
-
-            self.resultat.config(
-                text=(
-                    f"{message}\n"
-                    f"Probabilité de survie : "
-                    f"{probabilite * 100:.1f} %"
-                ),
-                bg=couleur
-            )
-
-            self.afficher_graphique(
-                graphique_prediction(probabilite)
-            )
-
-            self.sauvegarder_historique(
-                valeurs,
-                classe,
-                probabilite
-            )
-
-        except Exception as erreur:
-            messagebox.showerror(
-                "Erreur du modèle",
-                str(erreur)
-            )
-
-    def afficher_graphique(self, figure) -> None:
-        """Affiche une figure dans la zone de résultats."""
-
-        if self.canvas_graphique is not None:
-            self.canvas_graphique.get_tk_widget().destroy()
-
-        if self.figure is not None:
-            plt.close(self.figure)
-
-        self.figure = figure
-
-        self.canvas_graphique = FigureCanvasTkAgg(
-            figure,
-            master=self.zone_graphique
-        )
-
-        self.canvas_graphique.draw()
-
-        self.canvas_graphique.get_tk_widget().pack(
-            fill="both",
-            expand=True
-        )
-
-    def sauvegarder_historique(
-        self,
-        valeurs: dict,
-        classe: int,
-        probabilite: float
-    ) -> None:
-        """Enregistre la prédiction dans un fichier CSV."""
-
-        nouveau = (
-            not HISTORIQUE.exists()
-            or HISTORIQUE.stat().st_size == 0
-        )
-
-        with open(
-            HISTORIQUE,
-            "a",
-            newline="",
-            encoding="utf-8"
-        ) as fichier:
-
-            champs = [
-                "date",
-                "prediction",
-                "probabilite_survie",
-                "donnees"
-            ]
-
-            writer = csv.DictWriter(
-                fichier,
-                fieldnames=champs
-            )
-
-            if nouveau:
-                writer.writeheader()
-
-            writer.writerow({
-                "date": datetime.now().isoformat(
-                    timespec="seconds"
-                ),
-                "prediction": classe,
-                "probabilite_survie": probabilite,
-                "donnees": json.dumps(
-                    valeurs,
-                    ensure_ascii=False
-                )
-            })
+    def _afficher_graphique(self, figure: Figure) -> None:
+        """Remplace le graphique affiché par une nouvelle figure."""
+        if self._canvas_graphique is not None:
+            self._canvas_graphique.get_tk_widget().destroy()
+        if self._figure is not None:
+            plt.close(self._figure)
+        self._figure = figure
+        self._canvas_graphique = FigureCanvasTkAgg(figure, master=self._zone_graphique)
+        self._canvas_graphique.draw()
+        self._canvas_graphique.get_tk_widget().pack(fill="both", expand=True)
 
     def voir_historique(self) -> None:
-        """Affiche les prédictions enregistrées."""
-
+        """Ouvre une fenêtre listant les prédictions enregistrées."""
+        try:
+            entrees = self._historique.lire()
+        except (OSError, DonneeInvalideError) as erreur:
+            messagebox.showerror("Erreur d'historique", str(erreur))
+            return
         fenetre = tk.Toplevel(self)
         fenetre.title("Historique des prédictions")
         fenetre.geometry("750x400")
-
-        colonnes = (
-            "Date",
-            "Résultat",
-            "Probabilité de survie"
-        )
-
-        tableau = ttk.Treeview(
-            fenetre,
-            columns=colonnes,
-            show="headings"
-        )
-
+        colonnes = ("Date", "Résultat", "Probabilité de survie")
+        tableau = ttk.Treeview(fenetre, columns=colonnes, show="headings")
         for colonne in colonnes:
-            tableau.heading(
-                colonne,
-                text=colonne
-            )
-
-            tableau.column(
-                colonne,
-                width=220,
-                anchor="center"
-            )
-
-        tableau.pack(
-            fill="both",
-            expand=True,
-            padx=15,
-            pady=15
-        )
-
-        if not HISTORIQUE.exists():
-            return
-
-        try:
-            with open(
-                HISTORIQUE,
-                "r",
-                newline="",
-                encoding="utf-8"
-            ) as fichier:
-
-                lecteur = csv.DictReader(fichier)
-
-                for ligne in lecteur:
-
-                    classe = int(
-                        ligne["prediction"]
-                    )
-
-                    resultat = (
-                        "Survie"
-                        if classe == 1
-                        else "Fermeture"
-                    )
-
-                    probabilite = (
-                        float(
-                            ligne["probabilite_survie"]
-                        ) * 100
-                    )
-
-                    tableau.insert(
-                        "",
-                        "end",
-                        values=(
-                            ligne["date"],
-                            resultat,
-                            f"{probabilite:.1f} %"
-                        )
-                    )
-
-        except (
-            OSError,
-            ValueError,
-            KeyError
-        ) as erreur:
-            messagebox.showerror(
-                "Erreur d'historique",
-                str(erreur)
-            )
-
-
-if __name__ == "__main__":
-    application = Application()
-    application.mainloop()
+            tableau.heading(colonne, text=colonne)
+            tableau.column(colonne, width=220, anchor="center")
+        tableau.pack(fill="both", expand=True, padx=15, pady=15)
+        for entree in entrees:
+            tableau.insert("", "end", values=(entree["date"], entree["resultat"],
+                                              f"{entree['probabilite'] * 100:.1f} %"))
+        if not entrees:
+            tableau.insert("", "end", values=("Aucune prédiction", "", ""))
