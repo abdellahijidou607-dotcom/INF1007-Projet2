@@ -2,7 +2,7 @@
 
 Projet 2 — INF1007 (Introduction à la programmation), Polytechnique Montréal, automne 2026.
 
-**Équipe :** Hicham Omar mahamoud, Abdellahi Jidou
+**Équipe :** Hicham Omar Mahamoud, Abdellahi Jidou
 
 ## Description
 
@@ -15,7 +15,7 @@ L'utilisateur remplit un formulaire, clique sur **Prédire** et obtient un résu
 | | |
 |---|---|
 | Fichier | `donnees/restaurant_survival.csv` |
-| Source | [lien de la page du jeu de données] |
+| Source | [Restaurant Survival — Why They Really Close](https://www.kaggle.com/datasets/sergionefedov/restaurant-survival-why-they-really-close), Sergey Nefedov, Kaggle |
 | Licence | CC0 (domaine public) : redistribution autorisée |
 | Taille | 45 000 restaurants, 19 colonnes |
 | Cible | `survived_3y` (1 = a survécu 3 ans, 0 = a fermé avant) |
@@ -100,7 +100,7 @@ Matrice de confusion (lignes = réel, colonnes = prédit) :
 | **Réel : ferme** | 3 399 | 1 048 |
 | **Réel : survit** | 1 046 | 3 507 |
 
-**Limites :** le modèle se trompe sur environ 1 restaurant sur 4. La régression logistique ne capte pas les interactions complexes entre variables. Les données semblent synthétiques. Certaines variables (note moyenne, nombre d'avis) ne sont connues qu'après l'ouverture.
+**Limites :** le modèle se trompe sur environ 1 restaurant sur 4. La régression logistique ne capte pas les interactions complexes entre variables. Les données sont 100 % synthétiques (générées par simulation, d'après l'auteur) : les résultats ne garantissent pas la même performance sur de vrais restaurants. Certaines variables (note moyenne, nombre d'avis) ne sont connues qu'après l'ouverture.
 
 ## Tests et couverture
 
