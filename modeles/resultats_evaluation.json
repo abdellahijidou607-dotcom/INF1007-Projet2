@@ -1,0 +1,38 @@
+{
+  "modele": {
+    "exactitude": 0.7673333333333333,
+    "matrice_confusion": [
+      [
+        3399,
+        1048
+      ],
+      [
+        1046,
+        3507
+      ]
+    ],
+    "rappel_par_classe": [
+      0.7643,
+      0.7703
+    ]
+  },
+  "reference": {
+    "exactitude": 0.5058888888888889,
+    "matrice_confusion": [
+      [
+        0,
+        4447
+      ],
+      [
+        0,
+        4553
+      ]
+    ],
+    "rappel_par_classe": [
+      0.0,
+      1.0
+    ]
+  },
+  "gain_exactitude": 0.2614,
+  "exactitude_sklearn": 0.7673333333333333
+}
