@@ -1,19 +1,25 @@
-
-from pathlib import Path
+"""Graphiques Matplotlib : exploration des données et résultat d'une prédiction."""
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+
+from config import CHEMIN_CSV, CHEMIN_GRAPHIQUE, verifier_fichier
+from exceptions import DonneeInvalideError
 
 
-DOSSIER = Path(__file__).resolve().parent
-CSV = DOSSIER / "restaurant_survival.csv"
+def graphique_survie(chemin: str = CHEMIN_CSV) -> Figure:
+    """Crée le graphique d'exploration : restaurants fermés et survivants.
 
-
-def graphique_survie():
-    """Crée un graphique présentant les restaurants du CSV."""
-    donnees = pd.read_csv(CSV)
+    Reçoit : le chemin du CSV.
+    Renvoie : la figure Matplotlib.
+    Échoue : FichierIntrouvableError si le CSV manque,
+    DonneeInvalideError si la colonne survived_3y est absente.
+    """
+    verifier_fichier(chemin)
+    donnees = pd.read_csv(chemin)
 
     if "survived_3y" not in donnees.columns:
-        raise ValueError("Colonne survived_3y introuvable.")
+        raise DonneeInvalideError("Colonne survived_3y introuvable.")
 
     effectifs = donnees["survived_3y"].value_counts()
 
@@ -75,10 +81,15 @@ def graphique_survie():
     return fig
 
 
-def graphique_prediction(probabilite: float):
-    """Crée un graphique de probabilité de survie."""
+def graphique_prediction(probabilite: float) -> Figure:
+    """Crée le graphique des probabilités estimées pour une prédiction.
+
+    Reçoit : la probabilité de survie, entre 0 et 1.
+    Renvoie : la figure Matplotlib.
+    Échoue : DonneeInvalideError si la probabilité est hors de [0, 1].
+    """
     if not 0 <= probabilite <= 1:
-        raise ValueError("Probabilité invalide.")
+        raise DonneeInvalideError("Probabilité invalide.")
 
     fig, ax = plt.subplots(figsize=(6, 3.5))
 
@@ -121,7 +132,7 @@ def graphique_prediction(probabilite: float):
 if __name__ == "__main__":
     figure = graphique_survie()
     figure.savefig(
-        DOSSIER / "graphique_survie.png",
+        CHEMIN_GRAPHIQUE,
         dpi=150,
         bbox_inches="tight"
     )
