@@ -2,7 +2,7 @@
 
 Projet 2 INF1007 — Prédiction de survie des restaurants
 
-| Choix | Options envisagées | Choix retenu et justification | Validé par l'auxiliaire (date) |
+| Choix | Options envisagées | Choix retenu et justification 
 |---|---|---|---|
 | Domaine | Finance (cours de la bourse NVDA, S&P 500, taux de change EUR) ; restaurants | **Restaurants.** Les données financières sont des séries temporelles, mal adaptées à un modèle de classification simple et aux critères de l'énoncé. La survie d'un restaurant est une question concrète qu'un non-informaticien comprend. | |
 | Jeu de données | Données boursières ; « Restaurant Survival — Why They Really Close » (Kaggle) | **Restaurant Survival (Kaggle, Sergey Nefedov).** 45 000 lignes et 19 colonnes (dans l'intervalle 500 à 50 000), variables numériques et catégorielles, licence CC0, aucune donnée personnelle. Limite connue : données synthétiques. | |
